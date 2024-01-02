@@ -1,0 +1,673 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.15.2
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+Introduction-
+
+The aim is to investigate whether the number of asylum applications processed (decided on status) in the UK varies with the number of refugee or asylum seeker arrivals. This is an effort to assess whether the increase in arrivals overtime has been appropriately arranged for by the department in charge of processing applications. This is important to understand the backlog and thus, improve the refugee/asylum seeker conditions in the UK. They are often held in a state of limbo where they are waiting for a decision on their application and are thus, unable to work or send children to school. Government is also spending money, paying for their accommodation costs. More recently, agreements like the Rwanda agreement are to transfer refugees to Rwanda etc?
+
+
+*I'm trying to section this a bit to make things clearer*
+
+Data Cleaning -
+Importing language extensions. Making sure columns are readable. Making the 'Year' variable a string value (Harman correct me if I'm wrong).Replacing Na with 0. *Should we also remove duplicates or not necessary?? Also I cleaned a bit down low so maybe we should move this further up??*
+There is some data cleaning that is done only for specific sections of the analysis and therefore will not be included in this top section.
+
+*Included a suggestion of other things to clean just below but lmk if not necessary*
+
+```{python}
+#Removing duplicates??? Needed??
+def remove_duplicates(df):
+    return df.drop_duplicates()
+```
+
+```{python}
+#Importing necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+```
+
+```{python}
+#Number of applications overtime dataset, main applicants only
+asylum_applications_file = 'asylum-applications-datasets-sep-2023.csv'
+```
+
+```{python}
+#skiprows=1 to not transfer the title, to ensure column names are headings 
+number_of_applications = pd.read_csv(asylum_applications_file, skiprows=1)
+```
+
+```{python}
+#Applications waiting decisions overtime dataset main applicants only
+applications_awaiting_decisions_file = 'Copy-of-asylum-applications-awaiting-decision-datasets-sep-2023.csv'
+```
+
+```{python}
+applications_awaiting_decisions = pd.read_csv(applications_awaiting_decisions_file, skiprows=1)
+```
+
+```{python}
+number_of_applications.head()
+```
+
+```{python}
+#year column as consistent data type
+number_of_applications['Year'] = number_of_applications['Year'].astype(str)
+```
+
+```{python}
+#cleaning applications column by: removing commas, filling nan with 0, converting to int
+#assumption- by filling nan with 0, unrecorded asylum applications are null
+number_of_applications['Applications'] = number_of_applications['Applications'].str.replace(',', '')
+number_of_applications['Applications'] = number_of_applications['Applications'].fillna(0).astype(int)
+
+```
+
+```{python}
+#number_of_applications.iloc[69576]- row marks end of table
+no_of_applications= number_of_applications.drop([69576])
+```
+
+```{python}
+#groupby number of applications by country
+applications_per_country = no_of_applications.groupby('Nationality')['Applications'].sum().reset_index()
+applications_per_country.sort_values(by='Applications', ascending=False)
+```
+
+```{python}
+#groupby: total number of applications per year
+applications_per_year = no_of_applications.groupby('Year')['Applications'].sum().reset_index()
+applications_per_year.head()
+```
+
+```{python}
+plt.figure(figsize=(10, 6))
+x_axis = applications_per_year['Year'].iloc[9:]
+y_axis = applications_per_year['Applications'].iloc[9:]
+plt.plot(x_axis, y_axis)
+plt.title('Number of Asylum Applications Over Time in the UK')
+plt.xlabel('Year')
+plt.ylabel('Number of Applications (in thousands)')
+
+#Rotate x-axis labels for better readability
+plt.xticks(rotation=45, ha='right')
+
+plt.grid(True)
+plt.show()
+```
+
+This graph shows the number of asylum applications made in the UK. The fluctuations can be attributed to some geopolitical factors occuring at the same time, for example- the dip in applications made around 2020 can be a result of the Covid-19 pandemic.
+
+```{python}
+#applications_awaiting_decisions.iloc[32695]
+applications_awaiting_decisions.rename(columns={'Date (as at...)': 'Date'},inplace=True)
+app_awaiting_decisions = applications_awaiting_decisions.drop([32695])
+```
+
+```{python}
+#applications_awaiting_decisions rename date column
+#take out year from date in another column
+app_awaiting_decisions['Date'] = pd.to_datetime(app_awaiting_decisions['Date'])
+app_awaiting_decisions['Year'] = app_awaiting_decisions['Date'].dt.year
+app_awaiting_decisions.head()
+```
+
+```{python}
+#cleaning as above-
+app_awaiting_decisions['Year'] = app_awaiting_decisions['Year'].astype(str)
+#app_awaiting_decisions['Applications'] = app_awaiting_decisions['Applications'].astr.replace(',', '')
+app_awaiting_decisions['Applications'] = app_awaiting_decisions['Applications'].fillna(0).astype(int)
+```
+
+```{python}
+#groupby number of applications by country
+app_awaiting_per_country = app_awaiting_decisions.groupby('Nationality')['Applications'].sum().reset_index()
+app_awaiting_per_country.sort_values(by='Applications',ascending=False)
+```
+
+```{python}
+#groupby: total number of applications that were pending decisions per year
+app_awaiting_decisions_yearly = app_awaiting_decisions.groupby('Year')['Applications'].sum().reset_index()
+app_awaiting_decisions_yearly
+
+```
+
+```{python}
+plt.figure(figsize=(10, 6))
+x_axis_2 = app_awaiting_decisions_yearly['Year']
+y_axis_2 = app_awaiting_decisions_yearly ['Applications']/1000
+plt.plot(x_axis_2, y_axis_2)
+plt.title('Number of Asylum Applications awaiting decisions yearly in the UK')
+plt.xlabel('Year')
+plt.ylabel('Number of Applications awaiting decisions (in thousands)')
+
+#Rotate x-axis labels for better readability
+plt.xticks(rotation=45, ha='right')
+
+plt.grid(True)
+plt.show()
+```
+
+From this graph, we can see that the number of applications awaiting decisions follows the shape or fluctuations of the graph of number of applications. This indicates that the arrangements to process applications faster might not be taking place or not enough to assist in 
+
+```{python}
+#plot bar chart with a line graph
+#create a bar chart of number of applications that are awaiting decisions
+#line graph of the trend of the number of applications
+
+plt.figure(figsize=(10, 6))
+plt.plot(applications_per_year ['Year'], app_awaiting_decisions_yearly['Applications'], color='red', marker='o', label='Applications')
+plt.bar(app_awaiting_decisions_yearly['Year'], app_awaiting_decisions_yearly ['Applications'])
+plt.xlabel('Year')
+plt.ylabel('Number of Applications (in thousands)')
+plt.title('Applications and Processing Rate Over Years')
+# Add a legend
+plt.legend()
+#Rotate x-axis labels for better readability
+plt.xticks(rotation=45, ha='right')
+plt.grid(True)
+plt.show()
+```
+
+```{python}
+#mean, seeing the difference between mean of both to figure rate?
+#not comparable because number of applications only includes main applicants
+#and the awaiting applications includes dependants
+
+mean_no_of_applications = applications_per_year['Applications'].iloc[9:].mean()
+print('The mean of the number of applications per year is:', mean_no_of_applications)
+
+mean_app_awaiting_decisions = app_awaiting_decisions_yearly['Applications'].mean()
+print('The mean of the number of applications waiting decisions per year is:', mean_app_awaiting_decisions)
+
+```
+
+Looking at age and sex of applicants to see if these variables relate to application process time.
+
+
+To be able to analyse these datasets together and merge them to perform things like groupby etc. we have to 'chunk' the files. This cuts them down into chunks that can be analysed. The worry with this is that we are going to miss out on key data in the analysis.
+
+```{python}
+#Read asylum applications in chunks
+asylum_applications_chunks = pd.read_csv('asylum-applications-datasets-sep-2023.csv', skiprows=1, chunksize=10000)
+number_of_applications = pd.concat(asylum_applications_chunks)
+
+# Read applications awaiting decisions in chunks
+awaiting_decision_chunks = pd.read_csv('Copy-of-asylum-applications-awaiting-decision-datasets-sep-2023.csv', skiprows=1, chunksize=10000)
+applications_awaiting_decisions = pd.concat(awaiting_decision_chunks)
+```
+
+```{python}
+#Because the dataset is so large, we're only going to select the columns we want to explore currently.
+#This is 'Age', 'Sex', and 'Duration'. We also need to include 'Nationality' so to merge the datasets as merging requires a common column.
+awaiting_decision_subset = applications_awaiting_decisions.iloc[13211:][['Duration', 'Nationality']]
+asylum_applications_subset = number_of_applications.iloc[13211:][['Age', 'Sex', 'Nationality']]
+```
+
+As mentioned above, we are now merging the asylum applications dataset and the applications awaiting decisions dataset. Merging unifies the datasets and allows us to perform comparative analysis. As there needs to be a common column, 'Nationality' is added. We would merge based on year too but our datasets represent year differently. *This is maybe something we should try standardise across datasets.*
+
+```{python}
+#Now we merge
+merged_data = pd.merge(
+    awaiting_decision_subset,
+    asylum_applications_subset,
+    on=['Nationality'],
+    how='inner')
+
+#Cleaning by removing rows with NaN or 'N/A - Further review' in 'Duration' column.
+merged_data = merged_data.dropna(subset=['Duration'])
+
+merged_data = merged_data[merged_data['Duration'] != 'N/A - Further review']
+
+merged_data
+```
+
+Below we're printing the unique values from each of the columns in the merged dataset to see what the options are and how many of them in each column. This will help us decide the best kind of graph/plot for analysis between columns.
+
+```{python}
+#Unique values in 'Age' column
+print(merged_data['Age'].unique())
+
+#Unique values in 'Nationality' column
+print(merged_data['Nationality'].unique())
+
+#Unique values in 'Sex' column
+print(merged_data['Sex'].unique())
+
+#Unique values in 'Duration' column
+print(merged_data['Duration'].unique())
+```
+
+From this we can see that there are many unique values for 'Nationality' but far fewer for the other columns. We should bear this in mind when analysing.
+
+```{python}
+#Summary statistics
+merged_data.describe()
+```
+
+This table helps us understand the basics of the data. Because the columns are categorical values and not numeric, it shows us the Count, Unique, Top, and Frequency. Count shows us the number of rows in each column. Unique shows the number of unique values in each column (we already established this from our unique values calculation above but this gives the numbers without having to count them). Top shows the most frequently occurring value in each column. Freq shows the frequency of the most common value in each column.
+
+
+Because our columns hold categorical values instead of numeric, it is harder to perform comparative analysis on them. The following cells of code contain attempts at understanding the data through graphs and plots with much trial and error.
+
+```{python}
+#Don't really like this, just trying things out. Histogram of 'Duration' and 'Age' columns.
+sns.histplot(data=merged_data, x='Duration', kde=True)
+plt.title('Distribution of Duration')
+plt.show()
+
+sns.histplot(data=merged_data, x='Age', kde=True)
+plt.title('Distribution of Age')
+plt.show()
+```
+
+As we can see, these histograms aren't very effective. We're already aware that 'More than 6 months' is more common in the 'Duration' column from our summary statistics although we weren't yet aware that they are quite equal in count (from what we can see in the histogram). In terms of age, this histogram has helped show the spread of values across the different age categories but a bar chart would have done this more effectively.
+
+```{python}
+#Plotting the distribution of 'Duration' using a count plot
+plt.figure(figsize=(8, 6))
+sns.countplot(data=merged_data, x='Duration')
+plt.title('Distribution of Duration')
+plt.xlabel('Duration')
+plt.ylabel('Count')
+plt.show()
+
+#Plotting the distribution of 'Age' using a count plot
+plt.figure(figsize=(8, 6))
+sns.countplot(data=merged_data, x='Age')
+plt.title('Distribution of Age')
+plt.xlabel('Age')
+plt.ylabel('Count')
+plt.show()
+```
+
+These bar charts or 'count plots' as seaborn calls them better represent the data.
+
+
+Looking at 'Duration' and 'Age'.
+
+
+Doing a chi-squared test to determine whether there is a statistical association between 'Duration' and 'Age'.
+
+```{python}
+from scipy.stats import chi2_contingency
+
+#This creates a contingency table to show the frequency of distribution of values between 'Duration' and 'Age'.
+cross_tab = pd.crosstab(merged_data['Duration'], merged_data['Age'])
+
+#Do the actual test
+chi2, p, dof, expected = chi2_contingency(cross_tab)
+
+#Display statistics
+print("Chi-squared test statistic:", chi2)
+print("P-value:", p)
+print("Degrees of freedom:", dof)
+print("Expected frequencies table:")
+print(expected)
+```
+
+To measure how much the chi-squared test statistic deviates from the critical value, the following critical value test was done. The degrees of freedom is 5 because (row - 1) * (column - 1) = (2 - 1) * (6-1) = 5. The significance level sits at 0.05 because that is the conventional significance level used in most scientific fields. It provides a balance between making accurate conclusions and avoiding false positives.
+
+```{python}
+from scipy.stats import chi2
+# Degrees of freedom
+df = 5
+
+# Significance level (e.g., 0.05 for a 95% confidence level)
+significance_level = 0.05
+
+# Calculate critical value
+critical_value = chi2.ppf(1 - significance_level, df)
+print("Critical value:", critical_value)
+```
+
+The chi-squared test statistic is much larger than the critical value which suggests a big difference between observed frequencies and frequencies expected under the null hypothesis.
+As well as this, the p-value is small.
+This all suggests a significant association between 'Age' and 'Duration'.
+
+
+Now we want to see the distribution of frequencies across the categories within the 'Duration' and 'Age' columns to try and understand the relationship between them.
+
+```{python}
+#Plotting the observed frequencies in a heatmap
+plt.figure(figsize=(10, 6))
+sns.heatmap(cross_tab, annot=True, cmap='coolwarm', fmt='d')
+plt.title('Observed Frequencies of Duration vs Age')
+plt.xlabel('Age')
+plt.ylabel('Duration')
+plt.show()
+```
+
+```{python}
+#Plotting observed frequencies in a bar chart
+cross_tab.plot(kind='bar', stacked=True, figsize=(10, 6))
+plt.title('Observed Frequencies of Duration vs Age')
+plt.xlabel('Duration')
+plt.ylabel('Frequency')
+plt.xticks(rotation=0)  # Adjust x-axis labels rotation if necessary
+plt.legend(title='Age')
+plt.show()
+```
+
+Both the heatmap and the bar chart do not suggest any difference in duration within age categories. There seems to be a fairly even split between '6 months or less' and 'More than 6 months' within each age category.
+
+```{python}
+# Scatter plot to visualize relationship between 'Age' and 'Duration'
+plt.figure(figsize=(8, 6))
+plt.scatter(merged_data['Age'], merged_data['Duration'])
+plt.title('Age vs Application Process Duration')
+plt.xlabel('Age')
+plt.ylabel('Duration')
+plt.grid(True)
+plt.show()
+```
+
+This scatterplot is not useful in showing the relationship between 'Age' and 'Duration' as they're categorical variables. In order to perform analysis on these columns using plots and graphs that use numeric variables, we have tried to convert the categorical into numeric.
+
+```{python}
+#Assign numeric values to 'Duration' categories
+duration_numeric = {
+    '6 months or less': 0,
+    'More than 6 months': 1}
+
+#Assign numeric values to 'Age' categories
+age_numeric = {
+    'Under 18': 0,
+    '18-29': 1,
+    '30-49': 2,
+    '50-64': 3,
+    '65+': 4}
+```
+
+```{python}
+#Map 'Duration' and 'Age' columns to numerical categories
+merged_data['Duration_Category'] = merged_data['Duration'].map(duration_numeric)
+merged_data['Age_Category'] = merged_data['Age'].map(age_numeric)
+
+#Computing correlation coefficoent between 'Age_Category' and 'Duration_Category'
+correlation_matrix = merged_data[['Age_Category', 'Duration_Category']].corr()
+
+#Scatter plot between 'Age_Category' and 'Duration_Category'
+plt.figure(figsize=(6, 4))
+plt.scatter(merged_data['Age_Category'], merged_data['Duration_Category'], alpha=0.5)
+plt.xlabel('Age Category')
+plt.ylabel('Duration Category')
+plt.title('Scatter Plot: Age Category vs Duration Category')
+plt.grid(True)
+plt.show()
+```
+
+This also doesn't effectively show the relationship between 'Age' and 'Duration'.
+
+
+Here I shall attempt a linear regression between 'Age' and 'Duration'. Wish me luck.
+
+```{python}
+#Convert 'Age' and 'Duration' to arrays
+age = np.array(merged_data['age_numeric'])
+duration = np.array(merged_data['duration_numeric'])
+```
+
+```{python}
+
+```
+
+```{python}
+#Convert categorical columns to dummy variables
+duration_dummies = pd.get_dummies(merged_data['Duration'], prefix='Duration')
+age_dummies = pd.get_dummies(merged_data['Age'], prefix='Age')
+
+#Concatenate the dummy variables with the main dataframe
+merged_data_dummies = pd.concat([duration_dummies, age_dummies], axis=1)
+
+#Compute correlation matrix between the dummy variables
+correlation_matrix = merged_data_dummies.corr()
+
+#Plot a heatmap for the correlation matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Heatmap between Duration and Age Categories')
+plt.show()
+```
+
+This heatmap is, on first glance, a promising view of the correlation between the 'Duration' categories and the 'Age' categories. But upon further inspection there is, according to the heatmap, no correlation between any of the categories.
+
+```{python}
+#Pivot the data for Sex vs Duration
+pivot_table_sex = merged_data.pivot_table(index='Sex', columns='Duration', aggfunc='size', fill_value=0)
+
+#Plot the heatmap
+plt.figure(figsize=(10, 6))
+sns.heatmap(pivot_table_sex, annot=True, cmap='coolwarm', fmt='d')
+plt.title('Heatmap of Sex vs Duration')
+plt.xlabel('Duration')
+plt.ylabel('Sex')
+plt.show()
+```
+
+```{python}
+#Plotting the count of applications by nationality
+plt.figure(figsize=(12, 6))
+sns.countplot(data=merged_data, x='Nationality')
+plt.title('Count of Applications by Nationality')
+plt.xlabel('Nationality')
+plt.ylabel('Count')
+plt.xticks(rotation=90)
+plt.show()
+```
+
+```{python}
+#Select the top N nationalities by application count
+top_nationalities = merged_data['Nationality'].value_counts().head(10).index
+
+#Filter the data for the top nationalities
+top_nationality_data = merged_data[merged_data['Nationality'].isin(top_nationalities)]
+
+# Plotting the count of applications by nationality (top N)
+plt.figure(figsize=(12, 6))
+sns.countplot(data=top_nationality_data, x='Nationality', order=top_nationalities)
+plt.title('Count of Applications by Top Nationalities')
+plt.xlabel('Nationality')
+plt.ylabel('Count')
+plt.xticks(rotation=45)
+plt.show()
+```
+
+```{python}
+
+```
+
+```{python}
+#Box plot showing duration by nationality
+plt.figure(figsize=(12, 6))
+sns.boxplot(data=merged_data, x='Nationality', y='Duration')
+plt.title('Duration by Nationality')
+plt.xlabel('Nationality')
+plt.ylabel('Duration')
+plt.xticks(rotation=90)
+plt.show()
+```
+
+```{python}
+#Filter the data for the top nationalities (using the previously defined 'top_nationalities')
+top_nationality_data = merged_data[merged_data['Nationality'].isin(top_nationalities)]
+
+#Plotting a violin plot for Duration by Top Nationalities
+plt.figure(figsize=(12, 6))
+sns.violinplot(data=top_nationality_data, x='Duration', y='Nationality', order=top_nationalities)
+plt.title('Duration Distribution by Top Nationalities')
+plt.xlabel('Duration')
+plt.ylabel('Nationality')
+plt.show()
+```
+
+```{python}
+#Create a violin plot to analyse the relationship between 'Nationality' and 'Duration'
+plt.figure(figsize=(12, 8))
+sns.violinplot(data=merged_data, x='Duration', y='Nationality')
+plt.title('Relationship between Nationality and Duration')
+plt.xlabel('Duration')
+plt.ylabel('Nationality')
+plt.show()
+```
+
+```{python}
+#Select specific nationalities for analysis
+selected_nationalities = ['Germany', 'France', 'Italy', 'Spain', 'USA']
+
+#Filter data for selected nationalities
+filtered_data = merged_data[merged_data['Nationality'].isin(selected_nationalities)]
+
+#Create a violin plot to analyze the relationship between 'Nationality' and 'Duration'
+plt.figure(figsize=(12, 8))
+sns.violinplot(data=filtered_data, x='Duration', y='Nationality')
+plt.title('Relationship between Nationality and Duration (Selected Nationalities)')
+plt.xlabel('Duration')
+plt.ylabel('Nationality')
+plt.show()
+```
+
+```{python}
+#Select specific nationalities for analysis
+selected_nationalities = ['Iran', 'Afghanistan', 'Pakistan', 'Iraq', 'Syria', 'Sudan']
+
+#Filter data for selected nationalities
+filtered_data = merged_data[merged_data['Nationality'].isin(selected_nationalities)]
+
+# Create a violin plot to analyze the relationship between 'Nationality' and 'Duration'
+plt.figure(figsize=(12, 8))
+sns.violinplot(data=filtered_data, x='Duration', y='Nationality')
+plt.title('Relationship between Nationality and Duration (Selected Nationalities)')
+plt.xlabel('Duration')
+plt.ylabel('Nationality')
+plt.show()
+```
+
+```{python}
+#Creating a pair plot to analyze the relationship between nationality, age, and sex
+sns.pairplot(data=merged_data, hue='Nationality', vars=['Age', 'Sex'])
+plt.title('Relationship between Nationality, Age, and Sex')
+plt.show()
+```
+
+```{python}
+#Selecting specific nationalities for analysis
+selected_nationalities = ['Germany', 'France', 'Italy', 'Spain', 'USA']
+
+#Filtering data for selected nationalities
+filtered_data = merged_data[merged_data['Nationality'].isin(selected_nationalities)]
+
+#Creating separate scatterplots for each nationality
+plt.figure(figsize=(10, 6))
+sns.scatterplot(data=filtered_data, x='Age', y='Sex', hue='Nationality', palette='viridis')
+plt.title('Relationship between Age, Sex, and Nationality')
+plt.xlabel('Age')
+plt.ylabel('Sex')
+plt.legend(title='Nationality')
+plt.show()
+```
+
+```{python}
+#Selecting specific nationalities for analysis
+selected_nationalities = ['Germany', 'France', 'Italy', 'Spain', 'USA']
+
+#Filtering data for selected nationalities
+filtered_data = merged_data[merged_data['Nationality'].isin(selected_nationalities)]
+
+#Creating a violin plot to show the distribution of age by sex for selected nationalities
+plt.figure(figsize=(10, 6))
+sns.violinplot(data=filtered_data, x='Sex', y='Age', hue='Nationality', split=True, palette='viridis')
+plt.title('Distribution of Age by Sex for Selected Nationalities')
+plt.xlabel('Sex')
+plt.ylabel('Age')
+plt.legend(title='Nationality')
+plt.show()
+```
+
+```{python}
+#Count the occurrences of each nationality
+nationality_counts = merged_data['Nationality'].value_counts()
+
+#Print the top N most frequent nationalities (change N to your desired number)
+top_nationalities = 10  # For example, to get the top 10 nationalities
+print(nationality_counts.head(top_nationalities))
+```
+
+```{python}
+#Selecting specific nationalities for analysis
+selected_nationalities = ['Iran', 'Afghanistan', 'Pakistan', 'Iraq', 'Syria', 'Sudan']
+
+#Filtering data for selected nationalities
+filtered_data = merged_data[merged_data['Nationality'].isin(selected_nationalities)]
+
+#Creating a violin plot to show the distribution of age by sex for selected nationalities
+plt.figure(figsize=(10, 6))
+sns.violinplot(data=filtered_data, x='Sex', y='Age', hue='Nationality', split=True, palette='viridis')
+plt.title('Distribution of Age by Sex for Selected Nationalities')
+plt.xlabel('Sex')
+plt.ylabel('Age')
+plt.legend(title='Nationality')
+plt.show()
+```
+
+```{python}
+#Create a cross-tabulation of 'Duration' and 'Sex'
+cross_tab_sex = pd.crosstab(merged_data['Duration'], merged_data['Sex'])
+
+#Plotting observed frequencies in a bar chart for Duration vs Sex
+cross_tab_sex.plot(kind='bar', stacked=True, figsize=(10, 6))
+plt.title('Observed Frequencies of Duration vs Sex')
+plt.xlabel('Duration')
+plt.ylabel('Frequency')
+plt.xticks(rotation=0)  # Adjust x-axis labels rotation if necessary
+plt.legend(title='Sex')
+plt.show()
+```
+
+```{python}
+#If we want to use year then probs best to go through this process to cut down.
+#We need to filter the 'awaiting_decision_data' dataset because it is too large to merge with the other dataset and includes information from before 2010 which the other dataset doesn't have.
+#Before we do that we need to convert the 'Year' column to a numeric value.
+
+awaiting_decision_subset['Year'] = pd.to_numeric(awaiting_decision_subset['Year'], errors='coerce')
+
+#Now filtering
+filtered_awaiting_decision = awaiting_decision_subset[
+    (awaiting_decision_subset['Year'] >= 2010) & (awaiting_decision_subset['Year'] <= 2023)]
+```
+
+The following code creates an extra column in the awaiting decisions dataframe which has just the 'Year' instead of the date. This is useful if we want to include 'Year' in the merged_data dataframe. To do that we would just put this code snippet before the merging code and include 'Year' column in both datasets before merging.
+
+```{python}
+from dateutil.parser import parse
+
+def parse_date(date_str):
+    try:
+        #Try parsing the date with multiple formats
+        parsed_date = parse(date_str, fuzzy=True)
+        return parsed_date.year if parsed_date else None
+    except Exception as e:
+        return None
+
+#Clean 'Date (as at...)' column - Remove non-date entries
+applications_awaiting_decisions = applications_awaiting_decisions[applications_awaiting_decisions['Date (as at...)'] != 'End of table']
+
+#Convert to'Year' column
+applications_awaiting_decisions['Year'] = applications_awaiting_decisions['Date (as at...)'].apply(parse_date)
+```
+
+```{python}
+applications_awaiting_decisions.head()
+```
