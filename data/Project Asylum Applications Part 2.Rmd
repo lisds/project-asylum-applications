@@ -1,0 +1,881 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.15.2
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+Introduction-
+
+The aim is to investigate whether the number of asylum applications processed (decided on status) in the UK varies with the number of asylum seeker arrivals. This is an effort to assess whether the increase in arrivals overtime has been appropriately arranged for by the department in charge of processing applications. This is important to understand the backlog and thus, improve the refugee/asylum seeker conditions in the UK. They are often held in a state of limbo where they are waiting for a decision on their application and are thus, unable to work or send children to school. The UK Government is also spending money paying for their accommodation costs. More recently, projects such as the Rwanda Scheme have been pushed by the government to deport people to Rwanda.
+
+If, following this analysis, it is revealed that there is a backlog of applications proportionate to the number of applications then we will further explore the possible reasons for this using data collected about applicants such as Age, Sex, and Nationality. This is what this notebook is focusing on.
+
+
+Data Cleaning
+
+```{python}
+#Importing necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+```
+
+```{python}
+#Number of applications overtime dataset, main applicants only
+asylum_applications_file = 'asylum-applications-datasets-sep-2023.csv'
+```
+
+```{python}
+#skiprows=1 to not transfer the title, to ensure column names are headings 
+number_of_applications = pd.read_csv(asylum_applications_file, skiprows=1)
+```
+
+```{python}
+#Applications waiting decisions overtime dataset main applicants only
+applications_awaiting_decisions_file = 'Copy-of-asylum-applications-awaiting-decision-datasets-sep-2023.csv'
+```
+
+```{python}
+applications_awaiting_decisions = pd.read_csv(applications_awaiting_decisions_file, skiprows=1)
+```
+
+```{python}
+#cleaning applications column by: removing commas, filling nan with 0, converting to int
+#assumption- by filling nan with 0, unrecorded asylum applications are null
+number_of_applications['Applications'] = number_of_applications['Applications'].str.replace(',', '')
+number_of_applications['Applications'] = number_of_applications['Applications'].fillna(0).astype(int)
+```
+
+Looking at age and sex of applicants to see if these variables relate to application process time.
+
+
+To be able to analyse these datasets together and merge them to perform things like groupby etc. we have to randomly sample the files. This cuts them down into a merged dataframe that can be analysed without a MemoryError.
+
+
+The following code creates an extra column in the awaiting decisions dataframe which has just the 'Year' instead of the date. This is useful if we want to include 'Year' in the merged_data dataframe. To do that we would just put this code snippet before the merging code and include 'Year' column in both datasets before merging.
+
+```{python}
+from dateutil.parser import parse
+
+def parse_date(date_str):
+    try:
+        #Try parsing the date with multiple formats
+        parsed_date = parse(date_str, fuzzy=True)
+        return parsed_date.year if parsed_date else None
+    except Exception as e:
+        return None
+
+#Clean 'Date (as at...)' column - Remove non-date entries
+applications_awaiting_decisions = applications_awaiting_decisions[applications_awaiting_decisions['Date (as at...)'] != 'End of table']
+
+#Convert to'Year' column
+applications_awaiting_decisions['Year'] = applications_awaiting_decisions['Date (as at...)'].apply(parse_date)
+```
+
+```{python}
+applications_awaiting_decisions.head()
+```
+
+```{python}
+asylum_applications.columns
+```
+
+```{python}
+applications_awaiting_decisions.columns
+```
+
+```{python}
+#Check data types of columns in the asylum_applications DataFrame
+print(asylum_applications.dtypes)
+```
+
+```{python}
+#Check unique values in the first column (Column 0) of the asylum_applications DataFrame
+print(asylum_applications.iloc[:, 0].unique())
+```
+
+We don't want 'End of table to be included'.
+
+```{python}
+#Convert 'Year' column to numeric, ignoring rows with 'End of table'
+asylum_applications = asylum_applications[asylum_applications['Year'] != 'End of table']
+asylum_applications['Year'] = pd.to_numeric(asylum_applications['Year'], errors='coerce')
+
+#Print data types after conversion
+print(asylum_applications.dtypes)
+```
+
+```{python}
+asylum_applications = pd.read_csv(asylum_applications_file, skiprows=1, dtype={'Year': str})
+```
+
+As mentioned above, we are now merging the asylum applications dataset and the applications awaiting decisions dataset. Merging unifies the datasets and allows us to perform comparative analysis. As there needs to be a common column, 'Nationality' is added.
+
+```{python}
+#Confirming file paths
+asylum_applications_file = 'asylum-applications-datasets-sep-2023.csv'
+applications_awaiting_decisions_file = 'Copy-of-asylum-applications-awaiting-decision-datasets-sep-2023.csv'
+
+#Function to read a random sample of data
+def read_random_chunk(file_path, chunk_size):
+    total_rows = sum(1 for line in open(file_path))
+    skip_rows = sorted(np.random.choice(range(1, total_rows), total_rows - chunk_size, replace=False))
+    chunks = pd.read_csv(file_path, skiprows=skip_rows)
+    return chunks
+
+#Define chunk size
+chunk_size = 10000
+
+#Read random chunks of data for both datasets
+asylum_applications = pd.read_csv(asylum_applications_file, skiprows=1)
+applications_awaiting_decisions = pd.read_csv(applications_awaiting_decisions_file, skiprows=1)
+
+#Create 'Year' column in applications_awaiting_decisions
+from dateutil.parser import parse
+
+def parse_date(date_str):
+    try:
+        parsed_date = parse(date_str, fuzzy=True)
+        return parsed_date.year if parsed_date else None
+    except Exception as e:
+        return None
+
+applications_awaiting_decisions = applications_awaiting_decisions[applications_awaiting_decisions['Date (as at...)'] != 'End of table']
+applications_awaiting_decisions['Year'] = applications_awaiting_decisions['Date (as at...)'].apply(parse_date)
+
+#Define columns to merge on
+merge_columns = ['Nationality', 'Year']  # Common columns for merging
+
+#Sample specific columns from the datasets
+asylum_sampled_columns = asylum_applications.sample(n=chunk_size, replace=False)[merge_columns + ['Age', 'Sex']]
+applications_sampled_columns = applications_awaiting_decisions.sample(n=chunk_size, replace=False)[merge_columns + ['Duration']]
+
+#Merge specific columns from the datasets
+merged_data = pd.merge(asylum_sampled_columns, applications_sampled_columns, on=merge_columns)
+
+```
+
+```{python}
+merged_data
+```
+
+This is good but we need to clean a little more to remove rows with unwanted values.
+
+```{python}
+#Remove rows with 'Unknown Sex'
+merged_data = merged_data[merged_data['Sex'] != 'Unknown Sex']
+
+#Remove rows with 'Unknown Age'
+merged_data = merged_data[merged_data['Age'] != 'Unknown Age']
+
+#Remove rows withh 'N/A - Further review'
+merged_data = merged_data[merged_data['Duration'] != 'N/A - Further review']
+```
+
+```{python}
+#Unique values in 'Age' column
+print(merged_data['Age'].unique())
+
+#Unique values in 'Nationality' column
+print(merged_data['Nationality'].unique())
+
+#Unique values in 'Sex' column
+print(merged_data['Sex'].unique())
+
+#Unique values in 'Duration' column
+print(merged_data['Duration'].unique())
+
+#Unique values in 'Year' column
+print(merged_data['Year'].unique())
+```
+
+From this we can see that there are many unique values for 'Nationality' but far fewer for the other columns. We should bear this in mind when analysing.
+
+```{python}
+#Summary statistics
+merged_data.describe()
+```
+
+This table helps us understand the basics of the data. Because the columns are categorical values and not numeric, it shows us the Count, Unique, Top, and Frequency. Count shows us the number of rows in each column. Unique shows the number of unique values in each column (we already established this from our unique values calculation above but this gives the numbers without having to count them). Top shows the most frequently occurring value in each column. Freq shows the frequency of the most common value in each column.
+
+
+Because our columns hold categorical values instead of numeric, it is harder to perform comparative analysis on them. The following cells of code contain attempts at understanding the data through graphs and plots with much trial and error.
+
+```{python}
+#Histogram of 'Duration' and 'Age' columns.
+sns.histplot(data=merged_data, x='Duration', kde=True)
+plt.title('Distribution of Duration')
+plt.show()
+
+sns.histplot(data=merged_data, x='Age', kde=True)
+plt.title('Distribution of Age')
+plt.show()
+```
+
+As we can see, these histograms aren't very effective. We're already aware that 'More than 6 months' is more common in the 'Duration' column from our summary statistics although we weren't yet aware that they are quite equal in count (from what we can see in the histogram). In terms of age, this histogram has helped show the spread of values across the different age categories but a bar chart would have done this more effectively.
+
+```{python}
+#Plotting the distribution of 'Duration' using a count plot
+plt.figure(figsize=(8, 6))
+sns.countplot(data=merged_data, x='Duration')
+plt.title('Distribution of Duration')
+plt.xlabel('Duration')
+plt.ylabel('Count')
+plt.show()
+
+#Plotting the distribution of 'Age' using a count plot
+plt.figure(figsize=(8, 6))
+sns.countplot(data=merged_data, x='Age')
+plt.title('Distribution of Age')
+plt.xlabel('Age')
+plt.ylabel('Count')
+plt.show()
+```
+
+These bar charts or 'count plots' as seaborn calls them better represent the data.
+
+
+Doing a chi-squared test to determine whether there is a statistical association between 'Duration' and 'Age'.
+
+```{python}
+from scipy.stats import chi2_contingency
+
+#This creates a contingency table to show the frequency of distribution of values between 'Duration' and 'Age'.
+cross_tab_age_duration = pd.crosstab(merged_data['Duration'], merged_data['Age'])
+
+#Do the actual test
+chi2, p, dof, expected = chi2_contingency(cross_tab_age_duration)
+
+#Display statistics
+print("Chi-squared test statistic:", chi2)
+print("P-value:", p)
+print("Degrees of freedom:", dof)
+print("Expected frequencies table:")
+print(expected)
+```
+
+To measure how much the chi-squared test statistic deviates from the critical value, the following critical value test was done. The significance level sits at 0.05 because that is the conventional significance level used in most scientific fields. It provides a balance between making accurate conclusions and avoiding false positives.
+
+
+Considering the obtained chi-squared test statistic of 1.91 is less than the critical value of 11.07 and the p-value (0.75) is higher than the significance level of 0.05, it suggests that there is insufficient evidence to reject the null hypothesis.
+
+
+Now we want to see the distribution of frequencies across the categories within the 'Duration' and 'Age' columns to try and understand the relationship between them.
+
+```{python}
+#Plotting the observed frequencies in a heatmap
+plt.figure(figsize=(10, 6))
+sns.heatmap(cross_tab_age_duration, annot=True, cmap='coolwarm', fmt='d')
+plt.title('Observed Frequencies of Duration vs Age')
+plt.xlabel('Age')
+plt.ylabel('Duration')
+plt.show()
+```
+
+```{python}
+#Plotting observed frequencies in a bar chart
+cross_tab.plot(kind='bar', stacked=True, figsize=(10, 6))
+plt.title('Observed Frequencies of Duration vs Age')
+plt.xlabel('Duration')
+plt.ylabel('Frequency')
+plt.xticks(rotation=0)  # Adjust x-axis labels rotation if necessary
+plt.legend(title='Age')
+plt.show()
+```
+
+Both the heatmap and the bar chart do not suggest any difference in duration within age categories. There seems to be a fairly even split between '6 months or less' and 'More than 6 months' within each age category.
+
+```{python}
+#Assign numeric values to 'Duration' categories
+duration_numeric = {
+    '6 months or less': 0,
+    'More than 6 months': 1}
+
+#Assign numeric values to 'Age' categories
+age_numeric = {
+    'Under 18': 0,
+    '18-29': 1,
+    '30-49': 2,
+    '50-64': 3,
+    '65+': 4}
+```
+
+```{python}
+#Map 'Duration' and 'Age' columns to numerical categories
+merged_data['Duration_Category'] = merged_data['Duration'].map(duration_numeric)
+merged_data['Age_Category'] = merged_data['Age'].map(age_numeric)
+
+#Computing correlation coefficoent between 'Age_Category' and 'Duration_Category'
+correlation_matrix = merged_data[['Age_Category', 'Duration_Category']].corr()
+
+#Scatter plot between 'Age_Category' and 'Duration_Category'
+plt.figure(figsize=(6, 4))
+plt.scatter(merged_data['Age_Category'], merged_data['Duration_Category'], alpha=0.5)
+plt.xlabel('Age Category')
+plt.ylabel('Duration Category')
+plt.title('Scatter Plot: Age Category vs Duration Category')
+plt.grid(True)
+plt.show()
+```
+
+This also doesn't effectively show the relationship between 'Age' and 'Duration'.
+
+```{python}
+#Convert categorical columns to dummy variables
+duration_dummies = pd.get_dummies(merged_data['Duration'], prefix='Duration')
+age_dummies = pd.get_dummies(merged_data['Age'], prefix='Age')
+
+#Concatenate the dummy variables with the main dataframe
+merged_data_dummies = pd.concat([duration_dummies, age_dummies], axis=1)
+
+#Compute correlation matrix between the dummy variables
+correlation_matrix = merged_data_dummies.corr()
+
+#Plot a heatmap for the correlation matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt='.2f')
+plt.title('Correlation Heatmap between Duration and Age Categories')
+plt.show()
+```
+
+This heatmap is, on first glance, a promising view of the correlation between the 'Duration' categories and the 'Age' categories. But upon further inspection there is, according to the heatmap, no correlation between any of the categories.
+
+
+Sex and Duration
+
+```{python}
+#Plotting the distribution of 'Sex' using a count plot
+plt.figure(figsize=(8, 6))
+sns.countplot(data=merged_data, x='Sex')
+plt.title('Distribution of Sex')
+plt.xlabel('Age')
+plt.ylabel('Count')
+plt.show()
+```
+
+```{python}
+from scipy.stats import chi2_contingency
+
+#This creates a contingency table to show the frequency of distribution of values between 'Duration' and 'Age'.
+cross_tab_sex_duration = pd.crosstab(merged_data['Duration'], merged_data['Sex'])
+
+#Do the actual test
+chi2, p, dof, expected = chi2_contingency(cross_tab_sex_duration)
+
+#Display statistics
+print("Chi-squared test statistic:", chi2)
+print("P-value:", p)
+print("Degrees of freedom:", dof)
+print("Expected frequencies table:")
+print(expected)
+```
+
+```{python}
+from scipy.stats import chi2
+# Degrees of freedom
+df = 1
+
+# Significance level (e.g., 0.05 for a 95% confidence level)
+significance_level = 0.05
+
+# Calculate critical value
+critical_value = chi2.ppf(1 - significance_level, df)
+print("Critical value:", critical_value)
+```
+
+Considering the obtained chi-squared test statistic of 0.28 is much less than the critical value of 11.07 and the p-value (0.59) is higher than the significance level of 0.05, it suggests that there is insufficient evidence to reject the null hypothesis.
+
+```{python}
+#Plotting the observed frequencies in a heatmap
+plt.figure(figsize=(10, 6))
+sns.heatmap(cross_tab_sex_duration, annot=True, cmap='coolwarm', fmt='d')
+plt.title('Observed Frequencies of Duration vs Sex')
+plt.xlabel('Sex')
+plt.ylabel('Duration')
+plt.show()
+```
+
+It seems there is a high correlation between Male and 6 months or less and a low correlation between Female and More than 6 months.
+
+```{python}
+#Plotting observed frequencies in a bar chart
+cross_tab.plot(kind='bar', stacked=True, figsize=(10, 6))
+plt.title('Observed Frequencies of Duration vs Sex')
+plt.xlabel('Duration')
+plt.ylabel('Frequency')
+plt.legend(title='Sex')
+plt.show()
+```
+
+From these analyses it seems that there is strong evidence towards the null hypothesis that Age and Sex do not have an effect on Duration.
+
+
+Initially we began using the merged dataset to analyse the relationship between Nationality and Duration.
+
+```{python}
+#Plotting the distribution of 'Nationality' using a count plot
+plt.figure(figsize=(20, 6))
+sns.countplot(data=merged_data, x='Nationality')
+plt.title('Distribution of Nationality')
+plt.xlabel('Nationality')
+plt.ylabel('Count')
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+from scipy.stats import chi2_contingency
+
+#This creates a contingency table to show the frequency of distribution of values between 'Duration' and 'Age'.
+cross_tab_nationality_duration = pd.crosstab(merged_data['Duration'], merged_data['Nationality'])
+
+#Do the actual test
+chi2, p, dof, expected = chi2_contingency(cross_tab_nationality_duration)
+
+#Display statistics
+print("Chi-squared test statistic:", chi2)
+print("P-value:", p)
+print("Degrees of freedom:", dof)
+print("Expected frequencies table:")
+print(expected)
+```
+
+```{python}
+from scipy.stats import chi2
+# Degrees of freedom
+df = 1
+
+# Significance level (e.g., 0.05 for a 95% confidence level)
+significance_level = 0.05
+
+# Calculate critical value
+critical_value = chi2.ppf(1 - significance_level, df)
+print("Critical value:", critical_value)
+```
+
+There isn't sufficient evidence to reject the null hypothesis.
+
+```{python}
+#Plotting the observed frequencies in a heatmap
+plt.figure(figsize=(60, 6))
+sns.heatmap(cross_tab_nationality_duration, annot=True, cmap='coolwarm', fmt='d')
+plt.title('Observed Frequencies of Duration vs Nationality')
+plt.xlabel('Nationality')
+plt.ylabel('Duration')
+plt.show()
+```
+
+After this point I was looking to measure the relationship proportionally, looking at the Applications column but was initially stumped when trying to merge the Applications column. After a group meeting we came to the realisation that w don't need to use the merged dataframe for this part of the analysis as Nationality, Duration and Applications are all a part of the applications_awaiting_decisions dataframe.
+
+```{python}
+# Plotting the distribution of 'Nationality' using a count plot
+plt.figure(figsize=(20, 6))
+sns.countplot(data=applications_awaiting_decisions, x='Nationality')
+plt.title('Distribution of Nationality')
+plt.xlabel('Nationality')
+plt.ylabel('Count')
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.show()
+```
+
+Although interesting, this isn't very clear.
+
+```{python}
+from scipy.stats import chi2_contingency
+
+#This creates a contingency table to show the frequency of distribution of values between 'Duration' and 'Age'.
+cross_tab_nationality_duration_actual = pd.crosstab(applications_awaiting_decisions['Duration'], applications_awaiting_decisions['Nationality'])
+
+#Do the actual test
+chi2, p, dof, expected = chi2_contingency(cross_tab_nationality_duration_actual)
+
+#Display statistics
+print("Chi-squared test statistic:", chi2)
+print("P-value:", p)
+print("Degrees of freedom:", dof)
+print("Expected frequencies table:")
+print(expected)
+```
+
+```{python}
+from scipy.stats import chi2
+# Degrees of freedom
+df = 408
+
+#Significance level (e.g., 0.05 for a 95% confidence level)
+significance_level = 0.05
+
+#Calculate critical value
+critical_value = chi2.ppf(1 - significance_level, df)
+print("Critical value:", critical_value)
+```
+
+The chi-squared test statistic value obtained (1327.985) is far greater than the critical value (456.096) for a significance level of 0.05. Additionally, the associated p-value is extremely low (close to 0), suggesting strong evidence against the null hypothesis. Therefore, based on these statistics, it appears that there is a significant association between the 'Duration' and 'Nationality' variables in the dataset.
+
+```{python}
+#Plotting the observed frequencies in a heatmap
+plt.figure(figsize=(60, 6))
+sns.heatmap(cross_tab_nationality_duration_actual, annot=True, cmap='coolwarm', fmt='d')
+plt.title('Observed Frequencies of Duration vs Nationality')
+plt.xlabel('Nationality')
+plt.ylabel('Duration')
+plt.show()
+```
+
+```{python}
+#Calculate the proportions across each row (axis=1)
+proportions = cross_tab_nationality_duration_actual.div(cross_tab_nationality_duration_actual.sum(axis=1), axis=0)
+
+#Plotting the proportions of duration categories for each nationality
+plt.figure(figsize=(40, 8))
+sns.heatmap(proportions, annot=True, cmap='YlGnBu', fmt='.2f')
+plt.title('Proportions of Duration Categories for Each Nationality')
+plt.xlabel('Nationality')
+plt.ylabel('Duration')
+plt.show()
+```
+
+```{python}
+#Calculate the proportions across each row (axis=1)
+proportions = cross_tab_nationality_duration_actual.div(cross_tab_nationality_duration_actual.sum(axis=1), axis=0)
+
+#Plotting grouped bar charts to show the proportions of duration categories for each nationality
+plt.figure(figsize=(16, 8))
+
+#Iterate through each row (nationality) and plot a bar for each duration category
+for i in range(len(proportions)):
+    plt.bar(proportions.columns, proportions.iloc[i], alpha=0.7, label=f'Nationality {i}')
+
+plt.title('Proportions of Duration Categories for Each Nationality')
+plt.xlabel('Duration')
+plt.ylabel('Proportion')
+plt.legend()
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#Group by 'Nationality' and sum the 'Applications' column
+applications_per_nationality = applications_filtered.groupby('Nationality')['Applications'].sum()
+
+#Calculate total number of applications
+total_applications = applications_per_nationality.sum()
+
+#Calculate the percentage proportion of applications per nationality
+percentage_proportion = applications_per_nationality / total_applications * 100
+
+percentage_proportion
+```
+
+```{python}
+
+```
+
+```{python}
+#Mapping durations to numeric values
+duration_mapping = {
+    '6 months or less': 0,
+    '7-9 months': 1,
+    '10-12 months': 2,
+    '13-15 months': 3,
+    # Add more mappings as per your actual data
+}
+
+#Replace 'Duration' column values with mapped numeric values
+merged_for_comparison['DurationNumeric'] = merged_for_comparison['Duration'].map(duration_mapping)
+
+#Now, calculate the correlation between 'PercentageProportion' and 'DurationNumeric'
+relationship = merged_for_comparison[['PercentageProportion', 'DurationNumeric']].corr().iloc[0, 1]
+print("Correlation between Percentage Proportion and Duration:")
+print(relationship)
+```
+
+```{python}
+#Mapping durations to numeric values
+duration_mapping = {
+    '6 months or less': 0,
+    '7-9 months': 1,
+    '10-12 months': 2,
+    '13-15 months': 3,
+    #Add more mappings as per your actual data
+}
+
+#Replace 'Duration' column values with mapped numeric values
+merged_for_comparison['DurationNumeric'] = merged_for_comparison['Duration'].map(duration_mapping)
+
+#Create a scatter plot
+plt.figure(figsize=(8, 6))
+plt.scatter(merged_for_comparison['PercentageProportion'], merged_for_comparison['DurationNumeric'], alpha=0.5)
+plt.title('Relationship between Percentage Proportion and Duration')
+plt.xlabel('Percentage Proportion')
+plt.ylabel('Duration (Numeric)')
+plt.grid(True)
+plt.show()
+```
+
+```{python}
+#Mapping durations to numeric values
+duration_mapping = {
+    '6 months or less': 0,
+    '7-9 months': 1,
+    '10-12 months': 2,
+    '13-15 months': 3,
+    #Add more mappings as per your actual data
+}
+
+#Replace 'Duration' column values with mapped numeric values
+merged_for_comparison['DurationNumeric'] = merged_for_comparison['Duration'].map(duration_mapping)
+
+#Create a scatter plot with different colors for each nationality
+plt.figure(figsize=(10, 8))
+sns.scatterplot(
+    x='PercentageProportion',
+    y='DurationNumeric',
+    hue='Nationality',
+    palette='viridis',  # You can change the color palette as desired
+    data=merged_for_comparison,
+    alpha=0.8
+)
+plt.title('Relationship between Percentage Proportion and Duration by Nationality')
+plt.xlabel('Percentage Proportion')
+plt.ylabel('Duration (Numeric)')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+plt.show()
+```
+
+```{python}
+#Select the top 20 nationalities by percentage proportion
+top_20_nationalities = merged_for_comparison.nlargest(20, 'PercentageProportion')
+
+#Mapping durations to numeric values
+duration_mapping = {
+    '6 months or less': 0,
+    '7-9 months': 1,
+    '10-12 months': 2,
+    '13-15 months': 3,
+    # Add more mappings as per your actual data
+}
+
+#Replace 'Duration' column values with mapped numeric values
+top_20_nationalities['DurationNumeric'] = top_20_nationalities['Duration'].map(duration_mapping)
+
+#Create a scatter plot for the top 20 nationalities
+plt.figure(figsize=(10, 8))
+sns.scatterplot(
+    x='PercentageProportion',
+    y='DurationNumeric',
+    hue='Nationality',
+    palette='viridis',  # You can change the color palette as desired
+    data=top_20_nationalities,
+    alpha=0.8
+)
+plt.title('Relationship between Percentage Proportion and Duration for Top 20 Nationalities')
+plt.xlabel('Percentage Proportion')
+plt.ylabel('Duration (Numeric)')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+plt.show()
+```
+
+```{python}
+#Select the top 20 nationalities by percentage proportion
+top_20_nationalities = merged_for_comparison.nlargest(20, 'PercentageProportion')
+
+#Create a mapping for durations
+duration_mapping = {
+    '6 months or less': '0 - 6 months',
+    '7-9 months': '7 - 9 months',
+    '10-12 months': '10 - 12 months',
+    '13-15 months': '13 - 15 months',
+    #Add more mappings as per your actual data
+}
+
+#Apply the mapping to 'Duration' column to convert it into categorical data
+top_20_nationalities['DurationMapped'] = top_20_nationalities['Duration'].map(duration_mapping)
+
+#Create a scatter plot for the top 20 nationalities
+plt.figure(figsize=(12, 8))
+sns.scatterplot(
+    x='PercentageProportion',
+    y='DurationMapped',
+    hue='Nationality',
+    palette='viridis',
+    data=top_20_nationalities,
+    alpha=0.8,
+    marker='o',
+    s=100  # Size of markers
+)
+plt.title('Relationship between Percentage Proportion and Duration for Top 20 Nationalities')
+plt.xlabel('Percentage Proportion')
+plt.ylabel('Duration')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#Select the top 20 nationalities by percentage proportion
+top_20_nationalities = merged_for_comparison.nlargest(20, 'PercentageProportion')
+
+#Create a mapping for durations
+duration_mapping = {
+    '6 months or less': '0 - 6 months',
+    '7-9 months': '7 - 9 months',
+    '10-12 months': '10 - 12 months',
+    '13-15 months': '13 - 15 months',
+    #Add more mappings as per your actual data
+}
+
+#Apply the mapping to 'Duration' column to convert it into categorical data
+top_20_nationalities['DurationMapped'] = top_20_nationalities['Duration'].map(duration_mapping)
+
+#Create a scatter plot for the top 20 nationalities
+plt.figure(figsize=(12, 8))
+sns.scatterplot(
+    x='PercentageProportion',
+    y='DurationMapped',
+    hue='Nationality',
+    palette='viridis',
+    data=top_20_nationalities,
+    alpha=0.8,
+    marker='o',
+    s=100  # Size of markers
+)
+plt.title('Relationship between Percentage Proportion and Duration for Top 20 Nationalities')
+plt.xlabel('Percentage Proportion')
+plt.ylabel('Duration')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#Select the top 20 nationalities by percentage proportion
+top_20_nationalities = merged_for_comparison.nlargest(20, 'PercentageProportion')
+
+#Display a table of the top 20 nationalities and their percentage proportions
+top_20_table = top_20_nationalities[['Nationality', 'PercentageProportion']]
+print(top_20_table)
+```
+
+```{python}
+#Group by 'Nationality' and calculate the mean of 'PercentageProportion'
+unique_nationalities = merged_for_comparison.groupby('Nationality')['PercentageProportion'].mean()
+
+#Display the table of unique nationalities and their mean percentage proportions
+unique_nationalities_table = unique_nationalities.reset_index()
+print(unique_nationalities_table.head(20))
+```
+
+```{python}
+#Sort the unique nationalities table by 'PercentageProportion' in descending order
+top_20_nationalities = unique_nationalities_table.sort_values(by='PercentageProportion', ascending=False).head(20)
+
+#Display the top 20 nationalities and their mean percentage proportions
+print(top_20_nationalities)
+```
+
+```{python}
+#Sort the merged_for_comparison DataFrame by 'PercentageProportion' in descending order and get the top 20 nationalities
+top_20_nationalities_scatter = merged_for_comparison.sort_values(by='PercentageProportion', ascending=False).head(20)
+
+#Mapping durations to numeric values
+duration_mapping = {
+    '6 months or less': 0,
+    '7-9 months': 1,
+    '10-12 months': 2,
+    '13-15 months': 3,
+    #Add more mappings as per your actual data
+}
+
+#Replace 'Duration' column values with mapped numeric values
+top_20_nationalities_scatter['DurationNumeric'] = top_20_nationalities_scatter['Duration'].map(duration_mapping)
+
+#Create a scatter plot for the top 20 nationalities
+plt.figure(figsize=(10, 8))
+sns.scatterplot(
+    x='PercentageProportion',
+    y='DurationNumeric',
+    hue='Nationality',
+    palette='viridis',  # You can change the color palette as desired
+    data=top_20_nationalities_scatter,
+    alpha=0.8
+)
+plt.title('Relationship between Percentage Proportion and Duration for Top 20 Nationalities')
+plt.xlabel('Percentage Proportion')
+plt.ylabel('Duration (Numeric)')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+plt.show()
+```
+
+```{python}
+#Group by 'Nationality' and calculate the mean of 'PercentageProportion'
+unique_nationalities = merged_for_comparison.groupby('Nationality')['PercentageProportion'].mean()
+
+#Select the top 20 nationalities by mean percentage proportion
+top_20_nationalities = unique_nationalities.nlargest(20)
+
+#Filter the merged data for only the top 20 nationalities
+merged_top_20 = merged_for_comparison[merged_for_comparison['Nationality'].isin(top_20_nationalities.index)]
+
+#Mapping durations to numeric values
+duration_mapping = {
+    '6 months or less': 0,
+    '7-9 months': 1,
+    '10-12 months': 2,
+    '13-15 months': 3,
+    # Add more mappings as per your actual data
+}
+
+#Replace 'Duration' column values with mapped numeric values
+merged_top_20['DurationNumeric'] = merged_top_20['Duration'].map(duration_mapping)
+
+#Create a scatter plot for the top 20 nationalities
+plt.figure(figsize=(10, 8))
+sns.scatterplot(
+    x='PercentageProportion',
+    y='DurationNumeric',
+    hue='Nationality',
+    palette='viridis',  # You can change the color palette as desired
+    data=merged_top_20,
+    alpha=0.8
+)
+plt.title('Relationship between Percentage Proportion and Duration for Top 20 Unique Nationalities')
+plt.xlabel('Percentage Proportion')
+plt.ylabel('Duration (Numeric)')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+plt.show()
+```
+
+```{python}
+# Mapping durations to numeric values
+duration_mapping = {
+    '6 months or less': 0,
+    '7-9 months': 1,
+    '10-12 months': 2,
+    '13-15 months': 3,
+    # Add more mappings as per your actual data
+}
+
+# Replace 'Duration' column values with mapped numeric values
+merged_top_20['DurationNumeric'] = merged_top_20['Duration'].map(duration_mapping)
+```
+
+In conclusion, it seems there is no relationship between Age or Sex and Duration but there is still likely a possible relationship between Nationality and Duration. With more time this analysis would have been developed further.
