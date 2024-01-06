@@ -1,0 +1,279 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.15.2
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+### Introduction-
+
+This notebook looks at the number of asylum applications in the UK and the number of applications that are awaiting decisions. This is an effort to assess whether the number of arrivals overtime has been managed by those processing applications. This is important to understand the backlog and thus, improve the refugee/asylum seeker conditions in the UK. For applications awaiting decisions, the asylum seekers are in a state of limbo where they are waiting for a decision on their application and are thus, unable to work or send children to school. Looking at the discrepancies with those who are awaiting decisions and their gender and age, we can understand more on the how these variables effect the process time and thus, how we can improve the process of processing applications.
+
+
+
+We begin by importing dataset from Sept 2023 based on the number of asylum applications and asylum applications awaiting decisions. 
+
+```{python}
+#Importing necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scipy.stats as sps
+
+```
+
+```{python}
+#Number of applications from 2001-23 dataset
+asylum_applications_file = 'asylum-applications-datasets-sep-2023.csv'
+```
+
+```{python}
+#Read csv and bring the column names up from index 1 to index 0
+number_of_applications = pd.read_csv(asylum_applications_file, skiprows=1)
+number_of_applications.head()
+```
+
+```{python}
+#Applications waiting decisions from 2010-23 dataset
+applications_awaiting_decisions_file = 'Copy-of-asylum-applications-awaiting-decision-datasets-sep-2023.csv'
+```
+
+```{python}
+#read the second csv and shift column names to the header
+applications_awaiting_decisions = pd.read_csv(applications_awaiting_decisions_file, skiprows=1)
+applications_awaiting_decisions.head()
+```
+
+We'll start by exploring the number of applications (first csv)-
+
+```{python}
+number_of_applications.head()
+```
+
+Data cleaning-
+
+```{python}
+#Removing duplicates
+def remove_duplicates(number_of_applications):
+    return df.drop_duplicates()
+```
+
+```{python}
+#year column as a string data type
+number_of_applications['Year'] = number_of_applications['Year'].astype(str)
+```
+
+```{python}
+#cleaning applications column by: removing commas, filling nan with 0, converting to int
+#assumption- by filling nan with 0, unrecorded asylum applications are null
+number_of_applications['Applications'] = number_of_applications['Applications'].str.replace(',', '')
+number_of_applications['Applications'] = number_of_applications['Applications'].fillna(0).astype(int)
+
+```
+
+```{python}
+#number_of_applications.iloc[69576]
+#this row marks end of table, row does not have values
+no_of_applications= number_of_applications.drop([69576])
+
+```
+
+The dataframe below lists the number of applications from different countries. In 2022, Albania, Afghanistan, Iran, Iraq and Syria are the countries with the most asylum applications to the UK.
+
+```{python}
+#this groupby shows the number of applications per country in the year 2022
+no_of_applications_2022 = no_of_applications[no_of_applications['Year'] == '2022']
+
+applications_per_country_2022 = no_of_applications_2022.groupby('Nationality')['Applications'].sum().reset_index() 
+applications_per_country_2022.sort_values(by = 'Applications', ascending = False)
+
+```
+
+```{python}
+#total number of applications in 2022
+applications_2022 = no_of_applications[no_of_applications['Year'] == '2022']
+sum_of_applications_2022 = applications_2022['Applications'].sum()
+sum_of_applications_2022
+```
+
+```{python}
+#Exploring year 2022
+applications_gender = applications_2022[applications_2022['Sex'] == 'Male']
+
+sum_of_male_applicants = applications_gender['Applications'].sum()
+proportion_of_male_applicants = sum_of_male_applicants/ sum_of_applications_2022
+proportion_of_male_applicants
+#proportion of males applying for asylum in 2022
+```
+
+The dataframe and plot below shows the total number of asylum applications per year to the UK.
+
+```{python}
+#groupby: total number of applications per year
+applications_per_year = no_of_applications.groupby('Year')['Applications'].sum().reset_index()
+applications_per_year
+```
+
+```{python}
+#plot mapping the number of applications per year
+plt.figure(figsize=(10, 6))
+x_axis = applications_per_year['Year']
+y_axis = applications_per_year['Applications']/1000
+plt.plot(x_axis, y_axis)
+plt.title('Number of Asylum Applications Over Time in the UK')
+plt.xlabel('Year ending sept')
+plt.ylabel('Number of Applications (in thousands)')
+
+#Rotate x-axis labels for better readability
+plt.xticks(rotation=45, ha='right')
+
+plt.grid(True)
+plt.show()
+```
+
+This graph shows the number of asylum applications made from 2001 to 2023, the current peak (in 2022) is close to the previous peak in 2002. The fluctuations can be attributed to some geopolitical factors occuring at the same time. The dip seen from Sept 2019 to Sept 2020 can be attributed to COVID-19 declared as a global pandemic in March 2020. With the lockdowns, the number of people seeking asylum decreased by 23% (from 2019-20). The number of asylum applicants in 2021 reached around 58,500, the greatest number since 2003 when around 60,000 people claimed asylum in the UK.
+
+Reference- GOV.UK. (2023). How many people do we grant protection to? [online] Available at: https://www.gov.uk/government/statistics/immigration-system-statistics-year-ending-september-2023/how-many-people-do-we-grant-protection-to.
+
+
+Having looked at the number of asylum applications overtime, we will explore the number of applications awaiting decisions (second csv)-
+
+```{python}
+#Csv 2, applications_awaiting_decisions
+#rename date column
+#applications_awaiting_decisions.iloc[32695] remove row at the end of table, no values
+applications_awaiting_decisions.rename(columns={'Date (as at...)': 'Date'},inplace=True)
+app_awaiting_decisions = applications_awaiting_decisions.drop([32695])
+```
+
+```{python}
+#take out the year from the date column to put in another column
+app_awaiting_decisions['Date'] = pd.to_datetime(app_awaiting_decisions['Date'])
+app_awaiting_decisions['Year'] = app_awaiting_decisions['Date'].dt.year
+app_awaiting_decisions.head()
+```
+
+```{python}
+#cleaning as done to csv 1 (number_of_applications)
+app_awaiting_decisions['Year'] = app_awaiting_decisions['Year'].astype(str)
+app_awaiting_decisions['Applications'] = app_awaiting_decisions['Applications'].fillna(0).astype(int)
+
+```
+
+The dataframe below shows the number of applications awaiting decisions per year. In particular, the applications are pending initial decisions (not further review) and concern initial decisions of duration less than 6 months.
+
+```{python}
+#groupby for number of applications awaiting decision per year
+#Filters- application stage as 'pending initial decisions' and duration of '6 months or less'
+awaiting_initial_decisions = app_awaiting_decisions[app_awaiting_decisions['Application stage'] == 'Pending initial decision']
+awaiting_initial_decisions_less_6_months = awaiting_initial_decisions[awaiting_initial_decisions['Duration'] == '6 months or less']
+
+app_awaiting_initial_decisions_less_6 = awaiting_initial_decisions_less_6_months.groupby('Year')['Applications'].sum().reset_index()
+app_awaiting_initial_decisions_less_6
+
+```
+
+At the end of Sept 2023, 120,392 cases are waiting for an initial decision. The number of cases awaiting an initial decision has increased overtime and more rapidly since 2018. The rise in cases awaiting an initial decision since 2018 was due to more cases entering the asylum system than receiving initial decisions.
+
+The dataframe below shows the proportion of the number of asylum seeker arrivals (number of applications made) compared to the applications pending initial review within 6 months. The backlog begins when the proportion of applications pending is greater than the applications made that year.
+
+```{python}
+#number of applications per year from csv 1
+#truncating applications_per_year to 2010-23
+total_applications_made_per_year = applications_per_year['Applications'].iloc[9:].reset_index()
+total_applications_made_per_year_2010_onwards = total_applications_made_per_year['Applications']
+
+```
+
+```{python}
+#Finding the proportion by 
+#dividing number of applications/arrivals with applications pending initial decisions
+#so a value greater than 1 indicates backlog, more pending case than arriving
+
+app_awaiting_initial_decisions_less_6['Number of Applications'] = total_applications_made_per_year_2010_onwards
+app_awaiting_initial_decisions_less_6
+app_awaiting_initial_decisions_less_6['Backlog'] = app_awaiting_initial_decisions_less_6['Applications']/app_awaiting_initial_decisions_less_6['Number of Applications']
+
+#renaming applications in the app_awaiting_initial_decisions_less_6 to pending applications
+app_awaiting_initial_decisions_less_6.rename(columns={'Applications': 'Pending Applications'}, inplace=True)
+app_awaiting_initial_decisions_less_6
+```
+
+The dataframe above shows the backlog value steadily increasing. This indicates unsustainable arrangements to coping with asylum applications.
+
+```{python}
+#lin regress between pending initial decisions less than 6 months
+applications_yearly = np.array(total_applications_made_per_year['Applications'])
+awaiting_applications_yearly = np.array(app_awaiting_initial_decisions_less_6['Pending Applications'])
+
+# fit a linear regression model, using scipy
+res = sps.linregress(applications_yearly, awaiting_applications_yearly)
+
+# Store the slope (b) and the intercept (c) as separate variables
+b_applications = res.slope
+c_applications = res.intercept
+
+# Print the slope and intercept
+print("For the model: applications_awaiting_decisions = b * number_of_applications + c")
+print(f"The slope (b) is {b_applications:.2f}")
+print(f"The intercept (c) is {c_applications:.2f}")
+```
+
+The above linear regressions shows the relationship between the number of applications and the number of applications awaiting decisions.
+
+We can look to investigate whether the applications waiting for less than six months are less/greater than the applications waiting for more than six months, this can help to indicate  where the processing applications fails to accomodate.
+
+```{python}
+#Applications awaiting initial decisions for more than 6 months 
+awaiting_decisions_more_than_6_months = awaiting_initial_decisions[awaiting_initial_decisions['Duration'] == 'More than 6 months']
+app_awaiting_initial_decisions_more_6 = awaiting_decisions_more_than_6_months.groupby('Year')['Applications'].sum().reset_index()
+app_awaiting_initial_decisions_more_6
+
+```
+
+```{python}
+plt.figure(figsize=(10, 6))
+
+# Plotting bars for applications awaiting decision for less than 6 months
+plt.bar(app_awaiting_initial_decisions_less_6['Year'], app_awaiting_initial_decisions_less_6['Pending Applications'],
+        label='Less Than 6 Months')
+
+#Plotting bars for applications awaiting decision for more than 6 months on top of the previous bars
+plt.bar(app_awaiting_initial_decisions_more_6['Year'], app_awaiting_initial_decisions_more_6['Applications'],
+        bottom=app_awaiting_initial_decisions_less_6['Pending Applications'], label='More Than 6 Months')
+
+#plot line for the number of arrivals
+plt.plot(app_awaiting_initial_decisions_more_6['Year'], total_applications_made_per_year_2010_onwards, color='black', marker='o', label='Total Applications')
+
+# Adding labels and title
+plt.title('Applications Awaiting Decision Duration Over Time')
+plt.xlabel('Year')
+plt.ylabel('Number of Applications')
+plt.legend()
+
+# Show the plot
+plt.grid(True)
+plt.show()
+```
+
+The graph above shows the number of asylum applications per year in the black line plot. The stacked bars contain the number of applications waiting for decisions, the blue bar shows waiting for less than 6 months and as expected it follows the amount of the points in black. However, the orange part represents the overfilling asylum applications waiting for more than 6 months, while there are fluctuations, it is increasing very quickly. 
+
+```{python}
+#As well as pending for initial decisions, some applications are pending for further review 
+app_awaiting_further_decisions = app_awaiting_decisions[app_awaiting_decisions['Application stage'] == 'Pending further review']
+app_awaiting_further_decisions_yearly = app_awaiting_further_decisions.groupby('Year')['Applications'].sum().reset_index()
+app_awaiting_further_decisions_yearly
+```
+
+These number of applications are fewer indicating the point of intervention for better practice needs to be for applications awaiting decisions for more than 6 months. 
+
+
+### Looking at age and sex of applicants to see if these variables relate to application process time.
